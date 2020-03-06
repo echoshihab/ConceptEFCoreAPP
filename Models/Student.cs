@@ -13,7 +13,6 @@ namespace ConceptEFCoreAPP.Models
         public DateTime EnrollmentDate { get; set; }
 
         //navigation property
-        public ICollection<Enrollment> Enrollments { get; set;
-        }
+        public ICollection<Enrollment> Enrollments { get; set;}
     }
 }
