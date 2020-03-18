@@ -103,7 +103,10 @@ namespace ConceptEFCoreAPP.Controllers
                 return NotFound();
             }
 
-            var instructor = await _context.Instructors.FindAsync(id);
+            var instructor = await _context.Instructors
+                            .Include(i => i.OfficeAssignment)
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(m => m.ID == id);
             if (instructor == null)
             {
                 return NotFound();
@@ -114,36 +117,40 @@ namespace ConceptEFCoreAPP.Controllers
         // POST: Instructors/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
+        [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ID,LastName,FirstMidName,HireDate")] Instructor instructor)
-        {
-            if (id != instructor.ID)
+        public async Task<IActionResult> EditPost(int? id)
+        { 
+            if (id == null)
             {
                 return NotFound();
             }
 
-            if (ModelState.IsValid)
+            var instructorToUpdate = await _context.Instructors
+                 .Include(i => i.OfficeAssignment)
+                 .FirstOrDefaultAsync(s => s.ID == id);
+
+            if (await TryUpdateModelAsync<Instructor>(
+                    instructorToUpdate,
+                    "",
+                    i => i.FirstMidName, i => i.LastName, i => i.HireDate, i => i.OfficeAssignment))
             {
+                    if(String.IsNullOrWhiteSpace(instructorToUpdate.OfficeAssignment?.Location))
+                    {
+                    instructorToUpdate.OfficeAssignment = null;
+                    }
                 try
-                {
-                    _context.Update(instructor);
+                    {
                     await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!InstructorExists(instructor.ID))
-                    {
-                        return NotFound();
                     }
-                    else
+                catch (DbUpdateException ex)
                     {
-                        throw;
+                    ModelState.AddModelError("", "Unable to save message due to " + ex.Message);
                     }
-                }
                 return RedirectToAction(nameof(Index));
+
             }
-            return View(instructor);
+            return View(instructorToUpdate);
         }
 
         // GET: Instructors/Delete/5
