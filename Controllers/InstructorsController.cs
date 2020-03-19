@@ -105,21 +105,42 @@ namespace ConceptEFCoreAPP.Controllers
 
             var instructor = await _context.Instructors
                             .Include(i => i.OfficeAssignment)
+                            .Include(i=> i.CourseAssignments).ThenInclude(i=>i.Course)
                             .AsNoTracking()
                             .FirstOrDefaultAsync(m => m.ID == id);
             if (instructor == null)
             {
                 return NotFound();
             }
+            PopulateAssignedCourseData(instructor);
             return View(instructor);
         }
+
+        private void PopulateAssignedCourseData(Instructor instructor)
+        {
+            var allCourses = _context.Courses;
+            var instructorCourses = new HashSet<int>(instructor.CourseAssignments.Select(c => c.CourseID));
+            var viewModel = new List<AssignedCourseData>();
+            foreach (var course in allCourses)
+            {
+                viewModel.Add(new AssignedCourseData
+                {
+                    CourseID = course.CourseID,
+                    Title = course.Title,
+                    Assigned = instructorCourses.Contains(course.CourseID)
+                });
+            }
+            ViewData["Courses"] = viewModel;
+        }
+
+
 
         // POST: Instructors/Edit/5
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
         // more details see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost, ActionName("Edit")]
+        [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditPost(int? id)
+        public async Task<IActionResult> Edit(int? id, string[] selectedCourses)
         { 
             if (id == null)
             {
@@ -128,7 +149,10 @@ namespace ConceptEFCoreAPP.Controllers
 
             var instructorToUpdate = await _context.Instructors
                  .Include(i => i.OfficeAssignment)
-                 .FirstOrDefaultAsync(s => s.ID == id);
+                 .Include(i => i.CourseAssignments)
+                    .ThenInclude(i => i.Course)
+                .FirstOrDefaultAsync(m => m.ID == id);
+
 
             if (await TryUpdateModelAsync<Instructor>(
                     instructorToUpdate,
@@ -139,6 +163,7 @@ namespace ConceptEFCoreAPP.Controllers
                     {
                     instructorToUpdate.OfficeAssignment = null;
                     }
+                UpdateInstructorCourses(selectedCourses, instructorToUpdate);
                 try
                     {
                     await _context.SaveChangesAsync();
@@ -150,7 +175,46 @@ namespace ConceptEFCoreAPP.Controllers
                 return RedirectToAction(nameof(Index));
 
             }
+            UpdateInstructorCourses(selectedCourses, instructorToUpdate);
+            PopulateAssignedCourseData(instructorToUpdate);
             return View(instructorToUpdate);
+        }
+
+        private void UpdateInstructorCourses(string[] selectedCourses, Instructor instructorToUpdate)
+        {
+            if(selectedCourses == null)
+            {
+                instructorToUpdate.CourseAssignments = new List<CourseAssignment>();
+                return;
+            }
+
+            var selectedCoursesHS = new HashSet<string>(selectedCourses);
+            var instructorCourses = new HashSet<int>(instructorToUpdate.CourseAssignments.Select(
+                c => c.Course.CourseID));
+
+            foreach (var course in _context.Courses)
+            {
+                if (selectedCoursesHS.Contains(course.CourseID.ToString()))
+                {
+                    if (!instructorCourses.Contains(course.CourseID))
+                    {
+                        instructorToUpdate.CourseAssignments.Add(new CourseAssignment
+                        {
+                            InstructorID = instructorToUpdate.ID,
+                            CourseID = course.CourseID
+                        });
+                    }
+
+                    else
+                    {
+                        if (instructorCourses.Contains(course.CourseID))
+                        {
+                            CourseAssignment coursetoRemove = instructorToUpdate.CourseAssignments.FirstOrDefault(i => i.CourseID == course.CourseID);
+                            _context.Remove(coursetoRemove);
+                        }
+                    }
+                }
+            }
         }
 
         // GET: Instructors/Delete/5
